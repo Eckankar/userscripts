@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name       KU Science Webprint Unlocker
 // @namespace  http://mathemaniac.org
-// @version    1.0.1
+// @version    1.0.2
 // @description  Tilføjer alllle printere til SCIENCE webprint. (Tak til Brandt for dumpet.)
-// @match      https://webprint.science.ku.dk/?
-// @match      https://webprint.science.ku.dk/index.cfm
+// @match      https://webprint.science.ku.dk/?*
+// @match      https://webprint.science.ku.dk/index.cfm*
 // @copyright  2014, Sebastian Paaske Tørholm
 // @require    https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js
 // ==/UserScript==
