@@ -8,7 +8,7 @@
 // @description    Hilights items that have bids with a red border and yellow background.
 // ==/UserScript==
 
-// Based on http://userscripts.org/users/126140 v.2.2.1
+// Based on http://userscripts-mirror.org/scripts/show/66089.html v.2.2.1
 // Updated for newer eBay layout.
 
 $('document').ready(function() {
