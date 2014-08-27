@@ -9,4 +9,6 @@
 // @require        http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js
 // ==/UserScript==
 
+// Inspired by Politiken Freeloader by Kristian Thy: http://userscripts-mirror.org/scripts/show/168318.html
+
 jQuery('<style>#teaserwrapper, #meteroverlay { display: none !important; }</style>').appendTo('head');
