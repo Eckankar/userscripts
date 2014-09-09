@@ -4,17 +4,27 @@
 // @include        http://www.okcupid.com/quickmatch*
 // @include        http://okcupid.com/quickmatch*
 // @description    Adds names to QuickMatches on OkCupid.
+// @version        1.0
+// @require        http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js
 // ==/UserScript==
 // Comments can be mailed to "Eckankar -at- gmail -dot- com"
 
+$(function () {
+    function addProfileLink() {
+        if (! $('span.aso .profile_link').length > 0) {
+            var username = Quickmatch.stack[0].sn;
+            console.log(username);
+            $('span.aso').prepend('<a href="http://okcupid.com/profile/' + username + '" class="profile_link">' + username + '</a> / ');
+        }
+    }
 
-var usernamefield = document.getElementsByName('sn');
-var username = usernamefield[0].getAttribute('value');
-var temp = document.getElementById('qmInfoCol');
-var newNode = document.createElement('span');
-var userlink = document.createElement('a');
-userlink.href = "http://www.okcupid.com/profile?u="+username;
-userlink.appendChild(document.createTextNode(username));
-newNode.appendChild(userlink);
-newNode.appendChild(document.createElement('br'));
-temp.insertBefore(newNode,temp.firstChild);
+    var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+    var config = { childList: true, characterData: false, attributes: false, subtree: true };
+    var observer = new MutationObserver( function (mutations) {
+        addProfileLink();
+    });
+
+    $('#left #info_blocks').each( function () { observer.observe(this, config); } );
+
+    addProfileLink();
+});
