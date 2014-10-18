@@ -11,3 +11,5 @@ A collection of my user scripts. These scripts act on websites to improve certai
 ## Script installation:
 
 * Go to a script, and click the "Raw" button in the top right corner. An installation prompt should then pop up.
+
+You can also go to [my Greasyfork page](https://greasyfork.org/users/4769-eckankar) and install them from there.
