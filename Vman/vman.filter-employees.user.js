@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Virtual Manager filtre på ansatte-søgning
 // @namespace  http://mathemaniac.org/
-// @version    1.0.0
+// @version    1.0.1
 // @description  Tilføjer filtrering (highlighting) til søgningen efter nye ansatte, så uegnede kandidater er nemmere at spotte.
 // @match        http://www.virtualmanager.com/employees/search*
 // @copyright  2016, Sebastian Paaske Tørholm
@@ -15,6 +15,7 @@ var types_select = '<select name="val_type">' + $.map(types, function(e) { retur
 
 var table = $('h2:contains(Personalesøgning) + div table');
 
+// Taken from http://stackoverflow.com/a/8877261/79061
 RegExp.prototype.execAll = function(string) {
     var match = null;
     var matches = new Array();
