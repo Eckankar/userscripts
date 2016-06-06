@@ -1,18 +1,20 @@
 // ==UserScript==
-// @name       Something Awful Friends Highlight
-// @namespace  http://mathemaniac.org
-// @version    1.0
+// @name         Something Awful Friends Highlight
+// @namespace    http://mathemaniac.org
+// @version      1.0.1
 // @description  Highlights posts of friends on Something Awful.
-// @match      http://forums.somethingawful.com/usercp.php*
-// @match      http://forums.somethingawful.com/showthread.php*
-// @copyright  2012, Sebastian Paaske Tørholm
+// @match        *://forums.somethingawful.com/usercp.php*
+// @match        *://forums.somethingawful.com/showthread.php*
+// @copyright    2012-2016, Sebastian Paaske Tørholm
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 var location = "" + document.location;
 
 // Scrape buddy list from user control panel
-if (location.match(/usercp\.php/)) {
+if (location.match(/usercp\.php/) && $('#buddylist').length) {
     var buddies = [];
     $('#buddylist a[href *= "member.php"]').each(function () {
         buddies.push($(this).attr('title'));

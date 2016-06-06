@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name       Highlight waffleimages links
-// @namespace  http://mathemaniac.org
-// @version    1.0
+// @name         Highlight waffleimages links
+// @namespace    http://mathemaniac.org
+// @version      1.0.1
 // @description  Highlights WaffleImages links on SA
-// @match      http://forums.somethingawful.com/*
-// @copyright  2013, Sebastian Paaske Tørholm
+// @match        *://forums.somethingawful.com/*
+// @copyright    2013, Sebastian Paaske Tørholm
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js
 // ==/UserScript==
 

@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name           Something Awful Single Post Link
 // @namespace      http://www.mathemaniac.org
-// @include        http://forum.somethingawful.com/showthread.php?*
-// @include        http://forums.somethingawful.com/showthread.php?*
-// @include        http://archives.somethingawful.com/showthread.php?*
+// @include        *://forum.somethingawful.com/showthread.php?*
+// @include        *://forums.somethingawful.com/showthread.php?*
+// @include        *://archives.somethingawful.com/showthread.php?*
 // @description    To add a link to display that single post on each post.
-// @version        1.0.2
+// @version        1.0.3
 // ==/UserScript==
 
 // 2nd of August, 2011: Update the script to work with the "Mark as read" links enabled.

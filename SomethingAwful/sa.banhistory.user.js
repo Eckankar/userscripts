@@ -2,8 +2,10 @@
 // @name           Something Awful Ban History
 // @namespace      http://www.mathemaniac.org
 // @description    Add link to user's Leper's Colon page to each post.
-// @include        http://forums.somethingawful.com/showthread.php?*
-// @include        http://forum.somethingawful.com/showthread.php?*
+// @version        1.1
+// @include        *://forums.somethingawful.com/showthread.php?*
+// @include        *://forum.somethingawful.com/showthread.php?*
+// @grant          none
 // ==/UserScript==
 
 var il = document.evaluate('//table[contains(@class,"post")]/descendant::ul[@class="profilelinks"]/li/a[contains(@href,"do_search_posthistory")]', document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);

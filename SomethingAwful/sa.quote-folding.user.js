@@ -1,12 +1,16 @@
 // ==UserScript==
 // @name           Something Awful Quote Folding
-// @description Automatically folds all quotes on the Something Awful forums
+// @description    Automatically folds all quotes on the Something Awful forums
+// @version        1.1.4
 // @namespace      http://www.mathemaniac.org
-// @include        http://forums.somethingawful.com/showthread.php?*
-// @include        http://forum.somethingawful.com/showthread.php?*
-// @author      Sebastian Paaske Tørholm (Sebbe on SA)
-// @homepage    http://www.mathemaniac.org
-// @version 1.1.3
+// @include        *://forums.somethingawful.com/showthread.php?*
+// @include        *://forum.somethingawful.com/showthread.php?*
+// @author         Sebastian Paaske Tørholm (Sebbe on SA)
+// @homepage       http://www.mathemaniac.org
+// @grant          GM_addStyle
+// @grant          GM_getValue
+// @grant          GM_setValue
+// @grant          GM_registerMenuCommand
 // ==/UserScript==
 
 (function() {

@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name           Something Awful Image-Domain On Hover
 // @namespace      http://www.mathemaniac.org
-// @include        http://forum.somethingawful.com/showthread.php?*
-// @include        http://forums.somethingawful.com/showthread.php?*
-// @include        http://archives.somethingawful.com/showthread.php?*
+// @include        *://forum.somethingawful.com/showthread.php?*
+// @include        *://forums.somethingawful.com/showthread.php?*
+// @include        *://archives.somethingawful.com/showthread.php?*
 // @description    Displays the domain of images on hover.
-// @version        1.1.0
+// @version        1.1.1
+// @grant          none
 // ==/UserScript==
 
+// Change for v1.1.1, June 6th, 2016: Support https.
 // Change for v1.1.0, December 9th, 2012: Handle attachments.
 // Change for v1.0.1, August 6th, 2011: Handle timgs.
 
