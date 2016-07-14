@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name           Something Awful OP recoloring
 // @description    Colors the posts of the thread OP yellow.
-// @version        1.1
+// @version        1.2
 // @namespace      http://www.mathemaniac.org
 // @include        *://forums.somethingawful.com/showthread.php?*
+// @grant          GM_addStyle
 // ==/UserScript==
 
 // Rewritten with help from Shawn Moore (sartak.org)
