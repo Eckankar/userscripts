@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name        YouTube Hide "Recommended for you" from related videos
 // @namespace   http://mathemaniac.org/
-// @version     1.0.1
+// @version     1.0.2
 // @description Hides videos marked as "Recommended for you" from the related videos on YouTube video pages.
 // @include     http://youtube.com/watch*
 // @include     http://www.youtube.com/watch*
