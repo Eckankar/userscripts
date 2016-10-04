@@ -18,7 +18,7 @@ function hideRecommended() {
             $(this).remove();
         }
     });
-    $('#watch-related').one('DOMSubtreeModified', hideRecommended);
+    $(document).one('DOMNodeInserted', '#watch-related', hideRecommended);
 }
 
 hideRecommended();
