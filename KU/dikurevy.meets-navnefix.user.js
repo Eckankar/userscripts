@@ -7,9 +7,9 @@
 // @grant       none
 // @require     https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js
 // ==/UserScript==
-$( function () {
+$(function () {
     $('table tbody tr td.user span.username').each( function () {
         var nick = $(this).text();
         $(this).text($(this).attr('title')).attr('title', nick);
     } );
-} );
+});
