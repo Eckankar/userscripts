@@ -2,11 +2,12 @@
 // @name           Better editor on HOT.dk
 // @description    Improves the HOT.dk editor
 // @author         Sebastian Paaske Tørholm
-// @include        http://www.hot.dk/Message*
-// @version        1.0
+// @include        https://www.hot.dk/Message*
+// @include        https://www.hot.dk/Profile*
+// @version        1.1
 // ==/UserScript==
 
-(function() {
+setTimeout(function() {
 var s = document.createElement("script");
 s.innerHTML = "CKEDITOR.instances.text.destroy(); CKEDITOR.replace( 'text', { toolbar : [\
     ['Source'],\
@@ -24,4 +25,4 @@ s.innerHTML = "CKEDITOR.instances.text.destroy(); CKEDITOR.replace( 'text', { to
     ['Maximize', 'ShowBlocks']\
 ] } )";
 document.body.appendChild(s);
-})();
+}, 1000);
