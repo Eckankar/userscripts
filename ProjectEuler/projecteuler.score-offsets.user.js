@@ -4,7 +4,7 @@
 // @version    1.0.1
 // @description  Shows the difference between your score and your friends' on Project Euler.
 // @match      http://projecteuler.net/friends
-// @copyright  2013, Sebastian Paaske Tørholm
+// @copyright  2013-2017, Sebastian Paaske Tørholm
 // @require    https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js
 // @grant none
 // ==/UserScript==
@@ -26,6 +26,4 @@
                             diff < 0 ? '<td style="color: red; text-align: center">' + diff + '</td>' : '<td style="text-align: center">0</td>');
         }
     });
-
-    console.log(myScore);
 })();
