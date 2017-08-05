@@ -4,7 +4,7 @@
 // @version    1.0
 // @description  Select a score and press "c" to show a text-box with the markdown needed for making the result list.
 // @match      http://www.reddit.com/r/Cubers/comments/*/cubing_competition*/
-// @copyright  2013+, Sebastian Paaske Tørholm
+// @copyright  2013-2017, Sebastian Paaske Tørholm
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js
 // ==/UserScript==
 
