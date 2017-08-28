@@ -5,7 +5,7 @@
 // @description  Improves PMs on Gaia in a few different ways.
 // @match      http://www.gaiaonline.com/profile/privmsg.php*
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js
-// @copyright  2012, Sebastian Paaske Tørholm
+// @copyright  2012-2017, Sebastian Paaske Tørholm
 // ==/UserScript==
 
 // Downloaded from http://userscripts.org/scripts/show/137486
