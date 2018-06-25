@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       TTN notify on change
 // @namespace  http://mathemaniac.org/
-// @version    1.0.0
+// @version    1.0.1
 // @description  Notifies when the content changes on TTN.
 // @match        https://www.treesnetwork.com/*
 // @copyright  2018, Sebastian Paaske Tørholm
@@ -19,10 +19,11 @@ $(function () {
 
         if (title !== last_name) {
             last_name = title;
-            if (document.hidden && title !== "Off The Air") {
+            if (document.hidden && title !== "Off The Air" && title !== "The Trees Network") {
                 var n = new Notification("Now playing on TTN: " + title, { "tag": "ttn_now_playing", "requireInteraction": true, "silent": false } );
             }
         }
     }
     setInterval(checkForChange, 1000);
 });
+
