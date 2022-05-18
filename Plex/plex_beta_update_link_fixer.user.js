@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name       Plex beta update link fixer
+// @name       Plex Media Server beta update link fixer
 // @namespace  http://mathemaniac.org/
-// @version    1.0.0
-// @description  Plex has been corrupting download links for users on the beta channel on linux. This user-script "turns up the geek", and fixes the links to point to the correct address.
+// @version    1.0.1
+// @description  Plex Media Server has been corrupting update download links for users on the beta channel on linux. This user-script "turns up the geek", and fixes the links to point to the correct address.
 // @match        https://app.plex.tv/desktop*
 // @copyright  2022, Sebastian Paaske Tørholm
 // @require    https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js
