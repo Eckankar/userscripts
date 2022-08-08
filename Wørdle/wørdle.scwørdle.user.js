@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.0.0
+// @version    1.1.0
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
@@ -10,6 +10,9 @@
 // ==/UserScript==
 /* jshint -W097 */
 'use strict';
+
+// v1.1.0 changes:
+// - Add scores to share text.
 
 (function () {
     document.getElementsByTagName('head')[0].insertAdjacentHTML('beforeend', `
@@ -79,6 +82,7 @@
     let state;
     let solution;
     let gameOver = false;
+    let scores;
 
     function reloadState() {
         state = JSON.parse( localStorage.getItem("state") );
@@ -129,12 +133,13 @@
     function fixScores() {
         let i = 0;
         let validWords = Array.from(decodedWords);
+        scores = [];
 
         for (let scorebox of document.querySelectorAll('.scwørdle .score')) {
             if (state.o.length <= i) continue;
 
             validWords = applyHint(validWords, state.o[i++]);
-            scorebox.innerHTML = validWords.length;
+            scorebox.innerHTML = scores[i-1] = validWords.length;
             scorebox.nextElementSibling.innerHTML = validWords.join(', ');
         }
     }
@@ -151,6 +156,26 @@
             });
             let res = Reflect.apply(target, thisArg, argumentList);
             window.dispatchEvent(event);
+            return res;
+        },
+    });
+
+    Clipboard.prototype.writeText = new Proxy(Clipboard.prototype.writeText, {
+        apply(target, thisArg, argumentList) {
+            let shareLines = argumentList[0].split(/\n/);
+
+            // If we solve it - omit number from last line, as it's always 1.
+            // If we don't solve it, show scores on all lines
+            // The last -1 is for a blank line at the end.
+            let iterEnd = shareLines.length - (shareLines[0].match(/[1-6]\/6/) ? 2 : 1)
+
+            for (var i = 2; i < iterEnd; i++) {
+                shareLines[i] += ` ${scores[i-2]}`;
+            }
+
+            let shareString = shareLines.join("\n");
+
+            let res = Reflect.apply(target, thisArg, [shareString]);
             return res;
         },
     });
