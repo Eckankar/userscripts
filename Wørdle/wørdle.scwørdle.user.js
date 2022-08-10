@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.1.0
+// @version    1.1.1
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
@@ -11,6 +11,8 @@
 /* jshint -W097 */
 'use strict';
 
+// v1.1.1 changes:
+// - Hide score on fully completed row.
 // v1.1.0 changes:
 // - Add scores to share text.
 
@@ -26,6 +28,7 @@
             position: relative;
         }
         .game-has-ended .reveal-out + .scwørdle { visibility: inherit; }
+        .game-has-ended .reveal-out.match + .reveal-out.match + .reveal-out.match + .reveal-out.match + .reveal-out.match + .scwørdle { visibility: hidden; }
         .scwørdle .score {
             background-color: #4c96a3;
             color: white;
