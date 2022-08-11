@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.1.1
+// @version    1.1.2
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
@@ -11,6 +11,8 @@
 /* jshint -W097 */
 'use strict';
 
+// v1.1.2 changes:
+// - Improve mobile support
 // v1.1.1 changes:
 // - Hide score on fully completed row.
 // v1.1.0 changes:
@@ -81,15 +83,27 @@
         }, O));
     }
 
-    let decodedWords = words.map(decodeWord).sort();
+    let decodedWords;
     let state;
     let solution;
     let gameOver = false;
     let scores;
 
+    function initializeWords() {
+        try {
+            decodedWords = words.map(decodeWord).sort();
+            reloadState();
+        } catch (e) {
+            setTimeout(initializeWords, 200);
+        }
+    }
+
+    initializeWords();
+
+
     function reloadState() {
         state = JSON.parse( localStorage.getItem("state") );
-        if (! state) return;
+        if (! state || ! decodedWords) return;
         solution = decodeWord(state.d);
         gameOver = state.r !== 0;
 
@@ -188,3 +202,4 @@
     }, false);
     reloadState();
 })();
+
