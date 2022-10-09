@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.1.2
+// @version    1.1.3
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
@@ -11,6 +11,8 @@
 /* jshint -W097 */
 'use strict';
 
+// v1.1.3 changes:
+// - Handle sharing on mobile
 // v1.1.2 changes:
 // - Improve mobile support
 // v1.1.1 changes:
@@ -177,22 +179,34 @@
         },
     });
 
+    function rewriteShareString(orig) {
+        let shareLines = orig.split(/\n/);
+
+        // If we solve it - omit number from last line, as it's always 1.
+        // If we don't solve it, show scores on all lines
+        // The last -1 is for a blank line at the end.
+        let iterEnd = shareLines.length - (shareLines[0].match(/[1-6]\/6/) ? 2 : 1)
+
+        for (var i = 2; i < iterEnd; i++) {
+            shareLines[i] += ` ${scores[i-2]}`;
+        }
+
+        return shareLines.join("\n");
+    }
+
     Clipboard.prototype.writeText = new Proxy(Clipboard.prototype.writeText, {
         apply(target, thisArg, argumentList) {
-            let shareLines = argumentList[0].split(/\n/);
-
-            // If we solve it - omit number from last line, as it's always 1.
-            // If we don't solve it, show scores on all lines
-            // The last -1 is for a blank line at the end.
-            let iterEnd = shareLines.length - (shareLines[0].match(/[1-6]\/6/) ? 2 : 1)
-
-            for (var i = 2; i < iterEnd; i++) {
-                shareLines[i] += ` ${scores[i-2]}`;
-            }
-
-            let shareString = shareLines.join("\n");
-
+            let shareString = rewriteShareString(argumentList[0]);
             let res = Reflect.apply(target, thisArg, [shareString]);
+            return res;
+        },
+    });
+
+    Navigator.prototype.share = new Proxy(Navigator.prototype.share, {
+        apply(target, thisArg, argumentList) {
+            console.log(argumentList);
+            let shareString = rewriteShareString(argumentList[0].text);
+            let res = Reflect.apply(target, thisArg, [{ 'text': shareString }]);
             return res;
         },
     });
@@ -202,4 +216,5 @@
     }, false);
     reloadState();
 })();
+
 
