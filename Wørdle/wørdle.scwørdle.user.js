@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.1.3
+// @version    1.1.4
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
@@ -11,10 +11,12 @@
 /* jshint -W097 */
 'use strict';
 
+// v1.1.4 changes:
+// - Remove errant debug statement.
 // v1.1.3 changes:
-// - Handle sharing on mobile
+// - Handle sharing on mobile.
 // v1.1.2 changes:
-// - Improve mobile support
+// - Improve mobile support.
 // v1.1.1 changes:
 // - Hide score on fully completed row.
 // v1.1.0 changes:
@@ -204,7 +206,6 @@
 
     Navigator.prototype.share = new Proxy(Navigator.prototype.share, {
         apply(target, thisArg, argumentList) {
-            console.log(argumentList);
             let shareString = rewriteShareString(argumentList[0].text);
             let res = Reflect.apply(target, thisArg, [{ 'text': shareString }]);
             return res;
