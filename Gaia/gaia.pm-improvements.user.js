@@ -1,33 +1,14 @@
 // ==UserScript==
 // @name       Gaia Online PM improvements
 // @namespace  http://mathemaniac.org
-// @version    1.1
+// @version    1.1.1
 // @description  Improves PMs on Gaia in a few different ways.
-// @match      http://www.gaiaonline.com/profile/privmsg.php*
+// @match      https://www.gaiaonline.com/profile/privmsg.php*
 // @require      http://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.min.js
-// @copyright  2012-2017, Sebastian Paaske Tørholm
+// @copyright  2012-2023, Sebastian Paaske Tørholm
 // ==/UserScript==
 
 // Downloaded from http://userscripts.org/scripts/show/137486
-
-$('#erroroutput.msgbad').each( function (i, e) {
-    //$('#entry_form').attr('action', $('#entry_form').attr('action') + '?auto=1');
-    var cnt = 50;
-    var username = $('#username').attr('value');
-    var i = setInterval(function () {
-        if (cnt > 0) {
-            $(e).text("Autosending in " + cnt + " seconds.");
-            $('title').text(username + ': ' + cnt + " seconds.");
-            cnt--;
-        } else {
-            $(e).text("Autosending now...");
-            clearInterval(i);
-            $('title').text(username + ': Sending...');
-            $('#selected_options').attr('value', 'post');
-            $('#entry_form').submit();
-        }
-    }, 1000);
-} );
 
 $('button#btn_delete').each( function (i, e) {
     $(e).after('<a href="#" id="select_read" style="padding-left: 1em; padding-right: 1em;">Select replied</a>');
@@ -39,25 +20,14 @@ $('button#btn_delete').each( function (i, e) {
     } );
 } );
 
-$('div.mainError div.errorHead').each( function (i, e) {
-    if ($.trim($(e).text()) != "Information") { return; }
-
-    if (("" + document.location).match(/folder=inbox/)) {
-        document.location = "http://www.gaiaonline.com/profile/privmsg.php?folder=inbox";
-    } else {
-        // TODO: Make it close window on sent message.
-        // window.close();
-    }
-});
-
 (function () {
     // Hide quotes more than 10 levels deep.
     var levels = 10;
     var selector = "";
     for (var i = 0; i < levels; i++) {
-        selector += 'td.quote ';
+        selector += 'div.quote ';
     }
-    var first = $(selector + 'table').first();
+    var first = $(selector + 'div.quoted').first();
 
     first.css({'display': 'none'});
     first.before('<a id="mathemaniac_show_deeply_nested" href="#">Show hidden quotes.</a>');
@@ -75,3 +45,4 @@ $('div.mainError div.errorHead').each( function (i, e) {
         ev.preventDefault();
     });
 })();
+
