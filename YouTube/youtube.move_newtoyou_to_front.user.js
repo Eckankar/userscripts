@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       YouTube: Move "New To You" to front
 // @namespace  https://mathemaniac.org/
-// @version    1.0.0
+// @version    1.1.0
 // @description  Moves the "New To You" button to the front of the list, right after "All".
 // @match        https://www.youtube.com/
 // @copyright  2023, Sebastian Paaske Tørholm
@@ -10,6 +10,25 @@
 // ==/UserScript==
 /* jshint -W097 */
 'use strict';
+
+// Changelog:
+// 1.1.0: Re-do the sorting when returning to front page from a video as well.
+
+
+var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+var config = { childList: true, characterData: false, attributes: false, subtree: true };
+var observer = new MutationObserver( function (mutations) {
+    mutations.forEach( function (mutation) {
+        if (mutation.type == 'childList') {
+            let chips = document.querySelector('#chips');
+            if (chips && ! chips.querySelector('yt-chip-cloud-chip-renderer:has([title="All"]) + yt-chip-cloud-chip-renderer:has([title="New to you"])')) {
+                moveButton();
+            }
+        }
+    });
+});
+
+observer.observe(document.querySelector('body'), config);
 
 var interval;
 
