@@ -7,8 +7,6 @@
 // @version    2.3.4
 // @require        http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js
 // @description    Hilights items that have bids with a red border and yellow background.
-// @downloadURL https://update.greasyfork.org/scripts/4578/eBay%20-%20Hilight%20Items%20With%20Bids.user.js
-// @updateURL https://update.greasyfork.org/scripts/4578/eBay%20-%20Hilight%20Items%20With%20Bids.meta.js
 // ==/UserScript==
 
 // Based on http://userscripts.org/users/126140 v.2.2.1
