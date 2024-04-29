@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Transfer Wordle to Scoredle
 // @namespace    https://mathemaniac.org/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Adds a button to the Wordle completion screen, to transfer today's game into Scoredle in a new tab.
-// @match        https://www.nytimes.com/games/wordle/index.html
+// @match        https://www.nytimes.com/games/wordle/index.html*
 // @match        https://scoredle.com/*
 // @copyright    2024, Sebastian Paaske Tørholm
 // @grant        none
@@ -21,12 +21,6 @@ if (document.location.host === 'www.nytimes.com') {
             for (const node of mutation.addedNodes) {
                 if (node.nodeType === Node.TEXT_NODE) continue;
 
-                let userid = 1*document.cookie.match(/(?<=nyt-jkidd=uid=)\d+/)[0];
-                if (! userid) { userid = 'ANON'; }
-
-                let data = JSON.parse( localStorage.getItem(`nyt-wordle-moogle/${userid}`) );
-                if (! data || data.game.status === 'IN_PROGRESS') return;
-
                 let shareButton = node.querySelector('[class^="Footer-module_shareButton"]');
                 if (shareButton) {
                     let newButton = shareButton.cloneNode(true);
@@ -35,10 +29,16 @@ if (document.location.host === 'www.nytimes.com') {
                     newButton.setAttribute('style', 'margin-top: 0.25em;');
                     newButton.setAttribute('id', 'export-to-scoredle-btn');
                     newButton.onclick = async function () {
-                        let guesses = data.game.boardState.filter((e) => e);
+                        let userid = 1*document.cookie.match(/(?<=nyt-jkidd=uid=)\d+/)[0];
+                        if (! userid) { userid = 'ANON'; }
+
+                        let data = JSON.parse( localStorage.getItem(`games-state-wordleV2/${userid}`) );
+
+                        let state = data.states[0].data;
+                        let guesses = state.boardState.filter((e) => e);
 
                         let solution;
-                        if (data.game.status === 'WIN') {
+                        if (state.status === 'WIN') {
                             solution = guesses[guesses.length-1];
                         } else {
                             const todayDate = new Date();
@@ -62,6 +62,7 @@ if (document.location.host === 'www.nytimes.com') {
     observer.observe(document.querySelector('body'), config);
 } else {
     // Scoredle
+
     let matches = document.location.hash.match(/^#guesses=([^;]+);solution=(.*)$/);
     if (! matches) return;
 
