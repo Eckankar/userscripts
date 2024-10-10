@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Transfer Wordle to Scoredle
 // @namespace    https://mathemaniac.org/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Adds a button to the Wordle completion screen, to transfer today's game into Scoredle in a new tab.
 // @match        https://www.nytimes.com/games/wordle/index.html*
 // @match        https://scoredle.com/*
@@ -71,13 +71,24 @@ if (document.location.host === 'www.nytimes.com') {
 
     function inputValue(id, value) {
         let answerBox = document.querySelector(`#${id}`);
+
         answerBox.value = value;
         answerBox._valueTracker.setValue('');
         answerBox.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    inputValue('answer', solution);
-    for (var i = 0; i < guesses.length; i++) {
-        inputValue(`guess${i}`, guesses[i]);
+    function fillOutForm() {
+        let answerBox = document.querySelector(`#answer`);
+        if (! answerBox) {
+            setTimeout(fillOutForm, 100);
+            return;
+        }
+
+        inputValue('answer', solution);
+        for (var i = 0; i < guesses.length; i++) {
+            inputValue(`guess${i}`, guesses[i]);
+        }
     }
+
+    fillOutForm();
 }
