@@ -1,18 +1,20 @@
 // ==UserScript==
 // @name       Scwørdle - Scoredle for Wørdle.
 // @namespace  http://mathemaniac.org/
-// @version    1.1.5
+// @version    1.1.6
 // @description  Adds Scoredle.com like functionality to Wørdle.dk - a Danish Wordle clone. Only activates once you complete your game, shows number of valid words at each step, and on hover shows a list of those words.
 // @match        https://xn--wrdle-vua.dk/
 // @match        https://www.xn--wrdle-vua.dk/
-// @copyright  2022, Sebastian Paaske Tørholm
+// @copyright  2022-2024, Sebastian Paaske Tørholm
 // @grant none
 // ==/UserScript==
 /* jshint -W097 */
 'use strict';
 
+// v1.1.6 changes:
+// - Attempt to gracefully fall back to clipboard if we cannot share text on mobile.
 // v1.1.5 changes:
-// - Fix slight breakage introduced on platforms without sharing.
+// - Fix slight breakage introduced on platforms without sharing.s
 // v1.1.4 changes:
 // - Remove errant debug statement.
 // v1.1.3 changes:
@@ -210,7 +212,13 @@
         Navigator.prototype.share = new Proxy(Navigator.prototype.share, {
             apply(target, thisArg, argumentList) {
                 let shareString = rewriteShareString(argumentList[0].text);
-                let res = Reflect.apply(target, thisArg, [{ 'text': shareString }]);
+                let newData = { text: shareString };
+                if (navigator.canShare(newData)) {
+                    let res = Reflect.apply(target, thisArg, [newData]);
+                } else {
+                    // If we can't share text, fall-back to copying to clipboard
+                    navigator.clipboard.writeText(argumentList[0].text);
+                }
                 return res;
             },
         });
