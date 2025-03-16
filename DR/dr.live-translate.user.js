@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -12,7 +12,7 @@
 'use strict';
 
 // Set your AI provider here. It has to have an OpenAI compatible interface. I use LM Studio to host my own locally. (Remember to enable CORS.)
-const LLM_PROVIDER_BASE = "http://localhost:9523/v1";
+const LLM_PROVIDER_BASE = "http://localhost:1234/v1";
 // Set the AI model you wanna use to transcribe here. I feel like gemma-3-4b seems to do an alright job while being small.
 const LLM_MODEL = 'gemma-3-4b-it';
 
@@ -75,7 +75,7 @@ function setupTranslation() {
                 const sourceText = elm.textContent;
                 if (! sourceText) continue;
 
-                queryAI(LLM_MODEL, systemPrompt, sourceText).then(
+                queryLLM(LLM_MODEL, systemPrompt, sourceText).then(
                     (response) => {
                         response = response.replace(/^\s*(?:```(?:json)?)?\s*/, "").replace(/\s*(?:```)?\s*$/, "");
                         const data = JSON.parse(response);
