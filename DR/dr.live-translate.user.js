@@ -1,37 +1,62 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.1.0
+// @version      1.2.0
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
-// @grant        unsafeWindow
 // @license      MIT
+// @require      https://openuserjs.org/src/libs/sizzle/GM_config.js
+// @grant        unsafeWindow
+// @grant        GM_registerMenuCommand
 // ==/UserScript==
 /* jshint -W097 */
 'use strict';
 
-// Set your AI provider here. It has to have an OpenAI compatible interface. I use LM Studio to host my own locally. (Remember to enable CORS.)
-const LLM_PROVIDER_BASE = "http://localhost:1234/v1";
-// Set the AI model you wanna use to transcribe here. I feel like gemma-3-4b seems to do an alright job while being small.
-const LLM_MODEL = 'gemma-3-4b-it';
-// Should the originial Danish subtitles be preserved?
-const PRESERVE_DANISH_SUBS = true;
-// Subtitle color for the Danish subtitles
-const SUBTITLE_COLOR_DANISH = '#ffffff';
-// Subtitle color for the English subtitles
-const SUBTITLE_COLOR_ENGLISH = '#ffd78c';
+let gmc = new GM_config({
+    "id": "DRLiveTranslateConfig",
+    "title": "Configure DR Live Translate",
+    "fields": {
+        "llmProviderBase": {
+            "label": "LLM Provider API base URL",
+            "type": "text",
+            "default": "http://localhost:1234/v1"
+        },
+        "llmModel": {
+            "label": "LLM model used for translation",
+            "type": "text",
+            "default": 'gemma-3-4b-it'
+        },
+        "preserveDanishSubs": {
+            "label": "Preserve Danish subtitles?",
+            "type": 'checkbox',
+            "default": true
+        },
+        "subtitleColorDanish": {
+            "label": "Color of Danish subtitles",
+            "type": "text",
+            "default": "#FFFFFF"
+        },
+        "subtitleColorEnglish": {
+            "label": "Color of English subtitles",
+            "type": "text",
+            "default": "#FFD78C"
+        }
+    }
+});
 
-/// You shouldn't need to change below this point. ///
+GM_registerMenuCommand("Configure", (event) => {
+    gmc.open();
+});
 
 const systemPrompt = `
 You are a translation service.
 Your job is to translate sentences, or sentence fragments, from Danish to English.
-Try to preserve the original casing, as they might be partial fragments.
+Try to preserve the original casing and formatting, as they might be partial fragments.
 
-Give your result in the following JSON format:
+Give your result as a single JSON object in the following format:
 
-{ translatedText: "translated text goes here" }
+{ translatedText: "translated text goes here\nwith linebreaks if multiple lines" }
 `;
 
 async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperature=0) {
@@ -40,7 +65,7 @@ async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperat
         { role: "user", content: userPrompt }
     ];
 
-    const response = await fetch(LLM_PROVIDER_BASE + "/chat/completions", {
+    const response = await fetch(gmc.get('llmProviderBase') + "/chat/completions", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -81,7 +106,7 @@ function setupTranslation() {
                 const sourceText = elm.textContent;
                 if (! sourceText) continue;
 
-                queryLLM(LLM_MODEL, systemPrompt, sourceText).then(
+                queryLLM(gmc.get('llmModel'), systemPrompt, sourceText).then(
                     (response) => {
                         response = response.replace(/^\s*(?:```(?:json)?)?\s*/, "").replace(/\s*(?:```)?\s*$/, "");
                         const data = JSON.parse(response);
@@ -101,7 +126,7 @@ function setupTranslation() {
                         parent2.className = parent2.className.replace(/-da/, '-en');
                         parent.before(parent2);
 
-                        if (PRESERVE_DANISH_SUBS) {
+                        if (gmc.get('preserveDanishSubs')) {
                             // Reposition the English subtitles to be above the Danish ones
                             let enSubStyles = parent2.style;
                             let height = enSubStyles.getPropertyValue('height').replace(/px/, '');
@@ -115,10 +140,10 @@ function setupTranslation() {
                         let elm2 = parent2.querySelector('& > div');
                         elm2.textContent = translatedText;
 
-                        elm.style.setProperty('color', SUBTITLE_COLOR_DANISH);
-                        elm2.style.setProperty('color', SUBTITLE_COLOR_ENGLISH);
+                        elm.style.setProperty('color', gmc.get('subtitleColorDanish'));
+                        elm2.style.setProperty('color', gmc.get('subtitleColorEnglish'));
 
-                        if (! PRESERVE_DANISH_SUBS) {
+                        if (! gmc.get('preserveDanishSubs')) {
                             parent.remove();
                         }
                     },
