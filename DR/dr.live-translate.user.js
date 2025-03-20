@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.0.1
+// @version      1.1.0
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -15,6 +15,12 @@
 const LLM_PROVIDER_BASE = "http://localhost:1234/v1";
 // Set the AI model you wanna use to transcribe here. I feel like gemma-3-4b seems to do an alright job while being small.
 const LLM_MODEL = 'gemma-3-4b-it';
+// Should the originial Danish subtitles be preserved?
+const PRESERVE_DANISH_SUBS = true;
+// Subtitle color for the Danish subtitles
+const SUBTITLE_COLOR_DANISH = '#ffffff';
+// Subtitle color for the English subtitles
+const SUBTITLE_COLOR_ENGLISH = '#ffd78c';
 
 /// You shouldn't need to change below this point. ///
 
@@ -89,7 +95,32 @@ function setupTranslation() {
                         }
 
                         if (elm.textContent !== sourceText) return;
-                        elm.textContent = translatedText;
+
+                        let parent = elm.parentNode;
+                        let parent2 = parent.cloneNode(true);
+                        parent2.className = parent2.className.replace(/-da/, '-en');
+                        parent.before(parent2);
+
+                        if (PRESERVE_DANISH_SUBS) {
+                            // Reposition the English subtitles to be above the Danish ones
+                            let enSubStyles = parent2.style;
+                            let height = enSubStyles.getPropertyValue('height').replace(/px/, '');
+                            let inset = enSubStyles.getPropertyValue('inset');
+
+                            let match = inset.match(/^([\d.]+)px (.*)$/);
+                            let newOffset = match[1] - height;
+                            enSubStyles.setProperty('inset', `${newOffset}px ${match[2]}`);
+                        }
+
+                        let elm2 = parent2.querySelector('& > div');
+                        elm2.textContent = translatedText;
+
+                        elm.style.setProperty('color', SUBTITLE_COLOR_DANISH);
+                        elm2.style.setProperty('color', SUBTITLE_COLOR_ENGLISH);
+
+                        if (! PRESERVE_DANISH_SUBS) {
+                            parent.remove();
+                        }
                     },
                     (error) => {
                         console.log("rejected llm check", error, sourceText);
