@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.2.0
+// @version      1.2.1
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -56,7 +56,7 @@ Try to preserve the original casing and formatting, as they might be partial fra
 
 Give your result as a single JSON object in the following format:
 
-{ translatedText: "translated text goes here\nwith linebreaks if multiple lines" }
+{ "englishText": "English translation goes here\\nwith linebreaks if multiple lines" }
 `;
 
 async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperature=0) {
@@ -114,7 +114,7 @@ function setupTranslation() {
                             console.log('error with response json', response, sourceText);
                             return;
                         }
-                        const translatedText = data.translatedText;
+                        const translatedText = data.englishText;
                         if (! translatedText) {
                             console.log('error with translated text', data, sourceText, response);
                         }
