@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.2.2
+// @version      1.2.3
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -31,6 +31,11 @@ let gmc = new GM_config({
             "label": "Temperature (for LLM)",
             "type": "float",
             "default": 0.0
+        },
+        "includePreviousSubs: {
+            "label": "Include previous subtitles for translation context?",
+            "type": 'checkbox',
+            "default": true
         },
         "preserveDanishSubs": {
             "label": "Preserve Danish subtitles?",
@@ -121,7 +126,7 @@ ${lastLines.join("\n")}
                 lastLines.push(sourceText);
                 while (lastLines.length > 5) lastLines.shift();
 
-                queryLLM(gmc.get('llmModel'), systemPromptWithLog, sourceText).then(
+                queryLLM(gmc.get('llmModel'), gmc.get('includePreviousSubs') ? systemPromptWithLog : systemPrompt, sourceText).then(
                     (response) => {
                         response = response.replace(/^\s*(?:```(?:json)?)?\s*/, "").replace(/\s*(?:```)?\s*$/, "");
                         const data = JSON.parse(response);
