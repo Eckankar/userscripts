@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.2.3
+// @version      1.2.4
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -35,7 +35,7 @@ let gmc = new GM_config({
         "includePreviousSubs: {
             "label": "Include previous subtitles for translation context?",
             "type": 'checkbox',
-            "default": true
+            "default": false
         },
         "preserveDanishSubs": {
             "label": "Preserve Danish subtitles?",
