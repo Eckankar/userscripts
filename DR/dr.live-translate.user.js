@@ -32,7 +32,7 @@ let gmc = new GM_config({
             "type": "float",
             "default": 0.0
         },
-        "includePreviousSubs: {
+        "includePreviousSubs": {
             "label": "Include previous subtitles for translation context?",
             "type": 'checkbox',
             "default": false
