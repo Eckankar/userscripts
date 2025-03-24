@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.2.1
+// @version      1.2.2
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -26,6 +26,11 @@ let gmc = new GM_config({
             "label": "LLM model used for translation",
             "type": "text",
             "default": 'gemma-3-4b-it'
+        },
+        "modelTemperature": {
+            "label": "Temperature (for LLM)",
+            "type": "float",
+            "default": 0.0
         },
         "preserveDanishSubs": {
             "label": "Preserve Danish subtitles?",
@@ -59,7 +64,7 @@ Give your result as a single JSON object in the following format:
 { "englishText": "English translation goes here\\nwith linebreaks if multiple lines" }
 `;
 
-async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperature=0) {
+async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperature=gmc.get('modelTemperature')) {
     const messages = [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -86,6 +91,7 @@ async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperat
 setInterval(setupTranslation, 250);
 
 let oldPage = "";
+let lastLines = [];
 
 function setupTranslation() {
     const newPage = document.location + "";
@@ -106,7 +112,16 @@ function setupTranslation() {
                 const sourceText = elm.textContent;
                 if (! sourceText) continue;
 
-                queryLLM(gmc.get('llmModel'), systemPrompt, sourceText).then(
+                let systemPromptWithLog = systemPrompt + `
+
+The last lines of subtitles before this one were:
+
+${lastLines.join("\n")}
+`;
+                lastLines.push(sourceText);
+                while (lastLines.length > 5) lastLines.shift();
+
+                queryLLM(gmc.get('llmModel'), systemPromptWithLog, sourceText).then(
                     (response) => {
                         response = response.replace(/^\s*(?:```(?:json)?)?\s*/, "").replace(/\s*(?:```)?\s*$/, "");
                         const data = JSON.parse(response);
