@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.2.5
+// @version      1.3.0
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -11,6 +11,7 @@
 // @grant        GM_registerMenuCommand
 // ==/UserScript==
 /* jshint -W097 */
+/* global gmc */
 'use strict';
 
 let gmc = new GM_config({
@@ -51,6 +52,11 @@ let gmc = new GM_config({
             "label": "Color of English subtitles",
             "type": "text",
             "default": "#FFD78C"
+        },
+        "useJSONSchema": {
+            "label": "Use JSON schema (beta)",
+            "type": 'checkbox',
+            "default": true
         }
     }
 });
@@ -69,23 +75,51 @@ Give your result as a single JSON object in the following format:
 { "englishText": "English translation goes here\\nwith linebreaks if multiple lines" }
 `;
 
-async function queryLLM(model, systemPrompt, userPrompt, maxTokens=100, temperature=gmc.get('modelTemperature')) {
+const outputSchema = {
+  "type": "object",
+  "properties": {
+    "englishText": {
+      "description": "English translation",
+      "type": "string"
+    },
+  },
+};
+
+async function queryLLM(model, systemPrompt, userPrompt, args={}) {
+    const maxTokens = args.maxTokens ?? 100,
+          temperature = args.temperature ?? gmc.get('modelTemperature'),
+          schema = args.schema;
+
     const messages = [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
     ];
 
+    let requestBody = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": maxTokens
+    };
+
+    if (schema && gmc.get('useJSONSchema')) {
+        requestBody.response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "response",
+                "strict": "true",
+                "schema": schema,
+            },
+        };
+    }
+
+    console.log(JSON.stringify(requestBody));
     const response = await fetch(gmc.get('llmProviderBase') + "/chat/completions", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": maxTokens,
-        })
+        body: JSON.stringify(requestBody)
     });
 
     const data = await response.json();
@@ -126,7 +160,7 @@ ${lastLines.join("\n")}
                 lastLines.push(sourceText);
                 while (lastLines.length > 5) lastLines.shift();
 
-                queryLLM(gmc.get('llmModel'), gmc.get('includePreviousSubs') ? systemPromptWithLog : systemPrompt, sourceText).then(
+                queryLLM(gmc.get('llmModel'), gmc.get('includePreviousSubs') ? systemPromptWithLog : systemPrompt, sourceText, { "schema": outputSchema }).then(
                     (response) => {
                         response = response.replace(/^\s*(?:```(?:json)?)?\s*/, "").replace(/\s*(?:```)?\s*$/, "");
                         const data = JSON.parse(response);
