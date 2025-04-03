@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.3.0
+// @version      1.3.1
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -113,7 +113,6 @@ async function queryLLM(model, systemPrompt, userPrompt, args={}) {
         };
     }
 
-    console.log(JSON.stringify(requestBody));
     const response = await fetch(gmc.get('llmProviderBase') + "/chat/completions", {
         method: "POST",
         headers: {
