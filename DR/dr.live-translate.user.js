@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.3.1
+// @version      1.3.2
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -54,7 +54,7 @@ let gmc = new GM_config({
             "default": "#FFD78C"
         },
         "useJSONSchema": {
-            "label": "Use JSON schema (beta)",
+            "label": "Use JSON schema",
             "type": 'checkbox',
             "default": true
         }
