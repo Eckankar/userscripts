@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         DR Live Translate
 // @namespace    http://mathemaniac.org/
-// @version      1.3.2
+// @version      1.3.3
 // @description  Live-translates subtitles on DR.dk using a LLM.
 // @match        https://www.dr.dk/*
 // @copyright    2025, Sebastian Paaske Tørholm
@@ -175,23 +175,32 @@ ${lastLines.join("\n")}
                         if (elm.textContent !== sourceText) return;
 
                         let parent = elm.parentNode;
+
                         let parent2 = parent.cloneNode(true);
                         parent2.className = parent2.className.replace(/-da/, '-en');
                         parent.before(parent2);
 
+                        let elm2 = parent2.querySelector('& > div');
+                        elm2.textContent = translatedText;
+                        parent2.style.setProperty('height', '');
+
                         if (gmc.get('preserveDanishSubs')) {
                             // Reposition the English subtitles to be above the Danish ones
                             let enSubStyles = parent2.style;
-                            let height = enSubStyles.getPropertyValue('height').replace(/px/, '');
                             let inset = enSubStyles.getPropertyValue('inset');
 
-                            let match = inset.match(/^([\d.]+)px (.*)$/);
-                            let newOffset = match[1] - height;
-                            enSubStyles.setProperty('inset', `${newOffset}px ${match[2]}`);
-                        }
+                            let oldInsetMatch = inset.match(/^([\d.]+)px (.*)$/);
 
-                        let elm2 = parent2.querySelector('& > div');
-                        elm2.textContent = translatedText;
+                            let height = 0;
+                            for (let innerElm of parent2.querySelectorAll('& > div')) {
+                                for (let innerRect of innerElm.getClientRects()) {
+                                    height += innerRect.height;
+                                }
+                            }
+
+                            let newOffset = oldInsetMatch[1] - height;
+                            enSubStyles.setProperty('inset', `${newOffset}px ${oldInsetMatch[2]}`);
+                        }
 
                         elm.style.setProperty('color', gmc.get('subtitleColorDanish'));
                         elm2.style.setProperty('color', gmc.get('subtitleColorEnglish'));
