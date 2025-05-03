@@ -11,13 +11,14 @@
 
 // Based on http://userscripts.org/users/126140 v.2.2.1
 // Updated for newer eBay layout.
+// Updated 2024/02/08 to match correctly https://github.com/zackramjan
 
 $(function() {
-    $(".lvprices .lvformat").each(function() {
+   $(".s-item__bidCount").each(function() {
         // Skip listings with no bids.
         if ($(this).text().match(/\b0 bids/) || !$(this).text().match(/\d+ bids?/)) return;
 
-        $(this).closest('li[listingid]').css({
+        $(this).closest('li').css({
             "border": "3px solid red",
             "background-color": "yellow"
         });
