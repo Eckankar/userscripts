@@ -18,6 +18,6 @@ document.querySelectorAll('.srp-results .s-item').forEach((item) => {
     const bidText = bidBox.innerText;
     if (bidText.match(/^\s*\b0\b/) || ! bidText.match(/^\s*\d+/)) return;
 
-     item.style.border = "3px solid red";
-     item.style.backgroundColor = "yellow";
+    item.style.border = "3px solid red";
+    item.style.backgroundColor = "yellow";
 });
