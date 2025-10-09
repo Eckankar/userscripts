@@ -12,9 +12,10 @@
 // Based on http://userscripts.org/users/126140 v.2.2.1
 // Updated for newer eBay layout.
 // Updated 2024/02/08 to match correctly https://github.com/zackramjan
+// Updated 2025/10/16 to match correctly https://github.com/zackramjan
 
 $(function() {
-   $(".s-item__bidCount").each(function() {
+   $(".su-styled-text.secondary.large").each(function() {
         // Skip listings with no bids.
         if ($(this).text().match(/\b0 bids/) || !$(this).text().match(/\d+ bids?/)) return;
 
