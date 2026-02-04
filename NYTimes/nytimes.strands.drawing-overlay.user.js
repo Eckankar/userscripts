@@ -1,13 +1,17 @@
 // ==UserScript==
 // @name       NYTimes Strands Drawing Overlay
 // @namespace  http://mathemaniac.org/
-// @version    1.0.0
+// @version    1.1.0
 // @description  Adds a togglable drawing canvas overlay to the NYTimes.com Strands game.
 // @match      https://www.nytimes.com/games/strands
-// @copyright  2025, Sebastian Paaske Tørholm
+// @copyright  2025-2026, Sebastian Paaske Tørholm
 // @grant      none
 // @license    MIT
 // ==/UserScript==
+
+// Changelog:
+// 1.1.0 - Moved to vector-based layers that can be deleted/hidden and so on.
+// 1.0.0 - Initial release
 
 (function () {
     'use strict';
@@ -33,6 +37,14 @@
     let isOverlayVisible = false;
     let dpr = window.devicePixelRatio || 1; // Store Device Pixel Ratio
 
+    // --- Layers (vector) ---
+    /** @type {{id:string,name:string,visible:boolean,createdAt:number,strokes:Array<{color:string,size:number,points:Array<{nx:number,ny:number}>,letters?:string[]}>}[]} */
+    let layers = [];
+    /** @type {null|{color:string,size:number,points:Array<{nx:number,ny:number}>,letters:string[]}} */
+    let activeStroke = null;
+    let selectedLayerIds = new Set();
+    let letterGridCache = []; // [{letter, rect:{left,top,right,bottom}}...]
+
     // --- DOM Elements ---
     let gameBoardContainer = null;
     let canvasOverlay = null;
@@ -42,6 +54,11 @@
     let colorButtons = [];
     let cursorPreview = null;
 
+    // --- Layers UI elements ---
+    let layersPanel = null;
+    let layersListEl = null;
+    let mergeSelectedButton = null;
+
     // --- Storage ---
     const getGameDate = () => {
         const dateElement = document.getElementById('portal-game-date');
@@ -50,29 +67,64 @@
 
     const getStorageKey = (suffix) => `strands_drawing_${getGameDate()}_${suffix}`;
 
+    const safeJsonParse = (s, fallback) => {
+        try { return JSON.parse(s); } catch { return fallback; }
+    };
+
     const saveCanvasState = () => {
-        if (!canvasOverlay) return;
+        // Now saves vector layers (not a single raster image)
         try {
-            const dataURL = canvasOverlay.toDataURL();
-            localStorage.setItem(getStorageKey('canvas'), dataURL);
-            log('Canvas state saved.');
+            const payload = {
+                v: 1,
+                layers: layers.map(l => ({
+                    id: l.id,
+                    name: l.name,
+                    visible: !!l.visible,
+                    createdAt: l.createdAt,
+                    strokes: (l.strokes || []).map(st => ({
+                        color: st.color,
+                        size: st.size,
+                        points: (st.points || []).map(p => ({ nx: p.nx, ny: p.ny })),
+                        letters: Array.isArray(st.letters) ? st.letters : undefined
+                    }))
+                }))
+            };
+            localStorage.setItem(getStorageKey('layers'), JSON.stringify(payload));
+            log('Layers state saved.');
         } catch (e) {
-            console.error('Failed to save canvas state:', e);
+            console.error('Failed to save layers state:', e);
         }
     };
 
     const loadCanvasState = () => {
-        if (!canvasOverlay || !ctx) return;
-        const dataURL = localStorage.getItem(getStorageKey('canvas'));
-        if (dataURL) {
-            const img = new Image();
-            img.onload = () => {
-                ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
-                ctx.drawImage(img, 0, 0);
-                log('Canvas state loaded.');
-            };
-            img.src = dataURL;
-        }
+        // Now loads vector layers (not a single raster image)
+        const raw = localStorage.getItem(getStorageKey('layers'));
+        if (!raw) return;
+
+        const parsed = safeJsonParse(raw, null);
+        if (!parsed || !Array.isArray(parsed.layers)) return;
+
+        layers = parsed.layers
+            .filter(l => l && Array.isArray(l.strokes))
+            .map(l => ({
+                id: String(l.id || crypto.randomUUID()),
+                name: String(l.name || 'Layer'),
+                visible: l.visible !== false,
+                createdAt: Number(l.createdAt || Date.now()),
+                strokes: l.strokes.map(st => ({
+                    color: String(st.color || DEFAULT_COLOR),
+                    size: Number(st.size || DEFAULT_BRUSH_SIZE),
+                    points: Array.isArray(st.points) ? st.points.map(p => ({
+                        nx: Math.max(0, Math.min(1, Number(p.nx))),
+                        ny: Math.max(0, Math.min(1, Number(p.ny)))
+                    })) : [],
+                    letters: Array.isArray(st.letters) ? st.letters.map(String) : undefined
+                }))
+            }));
+
+        log(`Layers state loaded (${layers.length} layers).`);
+        renderAllLayers();
+        rebuildLayersUI();
     };
 
     const saveSettings = () => {
@@ -97,22 +149,130 @@
         log('Settings loaded.');
     };
 
+    // --- Letter grid cache (for auto layer naming) ---
+    const updateLetterGridCache = () => {
+        if (!gameBoardContainer) return;
+        const buttons = Array.from(gameBoardContainer.querySelectorAll("button[id^='button-']"));
+        letterGridCache = buttons
+            .map(btn => {
+                const letter = (btn.textContent || '').trim();
+                if (!letter) return null;
+                const r = btn.getBoundingClientRect();
+                return { letter, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } };
+            })
+            .filter(Boolean);
+        log(`Letter grid cached: ${letterGridCache.length} cells.`);
+    };
+
+    const hitTestLetterAtClientPoint = (clientX, clientY) => {
+        for (let i = 0; i < letterGridCache.length; i++) {
+            const cell = letterGridCache[i];
+            const r = cell.rect;
+            if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+                return { letter: cell.letter, cellIndex: i };
+            }
+        }
+        return null;
+    };
+
+    const makeUniqueLayerName = (base) => {
+        const clean = String(base || '').trim() || 'Layer';
+        const existing = new Set(layers.map(l => l.name));
+        if (!existing.has(clean)) return clean;
+        let i = 2;
+        while (existing.has(`${clean} (${i})`)) i++;
+        return `${clean} (${i})`;
+    };
+
+    // --- Rendering (composite visible layers onto single canvas) ---
+    const clearCanvas = () => {
+        if (!ctx || !canvasOverlay) return;
+        ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
+    };
+
+    const drawStrokeToCtx = (stroke, containerRect) => {
+        if (!ctx || !canvasOverlay) return;
+        const pts = stroke.points || [];
+        if (pts.length < 2) return;
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = (stroke.size || DEFAULT_BRUSH_SIZE) * dpr;
+        ctx.globalAlpha = 1;
+
+        ctx.beginPath();
+        const first = pts[0];
+        ctx.moveTo(first.nx * containerRect.width * dpr, first.ny * containerRect.height * dpr);
+        for (let i = 1; i < pts.length; i++) {
+            const p = pts[i];
+            ctx.lineTo(p.nx * containerRect.width * dpr, p.ny * containerRect.height * dpr);
+        }
+        ctx.stroke();
+    };
+
+    const renderAllLayers = () => {
+        if (!ctx || !canvasOverlay || !gameBoardContainer) return;
+        const containerRect = gameBoardContainer.getBoundingClientRect();
+        clearCanvas();
+        for (const layer of layers) {
+            if (!layer.visible) continue;
+            for (const stroke of (layer.strokes || [])) drawStrokeToCtx(stroke, containerRect);
+        }
+    };
+
     // --- Canvas Logic ---
     const startDrawing = (e) => {
         isDrawing = true;
-        [lastX, lastY] = getCanvasCoordinates(e); // Use canvas-specific coordinates
-        lastX *= dpr;
-        lastY *= dpr;
+
+        const [cssX, cssY] = getCanvasCoordinates(e);
+        const rect = canvasOverlay.getBoundingClientRect();
+        const nx = rect.width ? (cssX / rect.width) : 0;
+        const ny = rect.height ? (cssY / rect.height) : 0;
+
+        activeStroke = {
+            color: currentColor,
+            size: currentBrushSize,
+            points: [{ nx, ny }],
+            letters: [],
+            visitedCells: new Set()
+        };
+
+        // seed letter (if any)
+        const hitResult = hitTestLetterAtClientPoint(
+            e.type.includes('touch') ? e.touches[0].clientX : e.clientX,
+            e.type.includes('touch') ? e.touches[0].clientY : e.clientY
+        );
+        if (hitResult) {
+            activeStroke.letters.push(hitResult.letter);
+            activeStroke.visitedCells.add(hitResult.cellIndex);
+        }
+
+        lastX = cssX * dpr;
+        lastY = cssY * dpr;
     };
 
-    // Set canvas internal resolution to CSS size * DPR.
-    // Keep context transform as default (no scaling).
-    // Draw using CSS pixel coordinates directly.
-    // This ensures lineWidth is interpreted correctly in CSS pixels.
     const draw = (e) => {
-        if (!isDrawing || !isOverlayVisible) return;
-        let [currentX, currentY] = getCanvasCoordinates(e); // Use canvas-specific coordinates
+        if (!isDrawing || !isOverlayVisible || !ctx || !canvasOverlay || !activeStroke) return;
 
+        const [cssX, cssY] = getCanvasCoordinates(e);
+        const rect = canvasOverlay.getBoundingClientRect();
+        const nx = rect.width ? (cssX / rect.width) : 0;
+        const ny = rect.height ? (cssY / rect.height) : 0;
+
+        activeStroke.points.push({ nx, ny });
+
+        // auto-name sampling: collect unique letters in order from unique cells
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        const hitResult = hitTestLetterAtClientPoint(clientX, clientY);
+        if (hitResult && !activeStroke.visitedCells.has(hitResult.cellIndex)) {
+            activeStroke.letters.push(hitResult.letter);
+            activeStroke.visitedCells.add(hitResult.cellIndex);
+        }
+
+        // live draw (only the incremental segment) for responsiveness
         ctx.globalCompositeOperation = 'source-over';
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
@@ -120,26 +280,45 @@
         ctx.lineWidth = currentBrushSize * dpr;
         ctx.globalAlpha = 1;
 
-        currentX *= dpr;
-        currentY *= dpr;
+        const currentX = cssX * dpr;
+        const currentY = cssY * dpr;
 
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(currentX, currentY);
         ctx.stroke();
 
-        [lastX, lastY] = [currentX, currentY];
+        lastX = currentX;
+        lastY = currentY;
     };
 
     const stopDrawing = () => {
-        if (isDrawing) {
-            isDrawing = false;
-            saveCanvasState();
-        }
+        if (!isDrawing) return;
+        isDrawing = false;
+
+        const stroke = activeStroke;
+        activeStroke = null;
+
+        if (!stroke || !stroke.points || stroke.points.length < 2) return;
+
+        const baseName = (stroke.letters && stroke.letters.length)
+            ? stroke.letters.join('')
+            : `Layer ${layers.length + 1}`;
+
+        layers.push({
+            id: crypto.randomUUID(),
+            name: makeUniqueLayerName(baseName),
+            visible: true,
+            createdAt: Date.now(),
+            strokes: [{ color: stroke.color, size: stroke.size, points: stroke.points, letters: stroke.letters }]
+        });
+
+        renderAllLayers();
+        saveCanvasState();
+        rebuildLayersUI();
     };
 
     // --- Coordinate Functions ---
-    // For drawing on the canvas (relative to canvas)
     const getCanvasCoordinates = (e) => {
         const rect = canvasOverlay.getBoundingClientRect();
         let clientX, clientY;
@@ -152,6 +331,228 @@
         }
         // Return coordinates relative to the canvas top-left in CSS pixels
         return [(clientX - rect.left), (clientY - rect.top)];
+    };
+
+    // --- UI: Layers panel ---
+    const toggleLayerVisibility = (layerId) => {
+        const layer = layers.find(l => l.id === layerId);
+        if (!layer) return;
+        layer.visible = !layer.visible;
+        renderAllLayers();
+        saveCanvasState();
+        rebuildLayersUI();
+    };
+
+    const changeLayerColor = (layerId, newColor) => {
+        const layer = layers.find(l => l.id === layerId);
+        if (!layer) return;
+        // Change color of all strokes in this layer
+        for (const stroke of (layer.strokes || [])) {
+            stroke.color = newColor;
+        }
+        renderAllLayers();
+        saveCanvasState();
+        rebuildLayersUI();
+    };
+
+    const deleteLayer = (layerId) => {
+        layers = layers.filter(l => l.id !== layerId);
+        selectedLayerIds.delete(layerId);
+        renderAllLayers();
+        saveCanvasState();
+        rebuildLayersUI();
+    };
+
+    const mergeSelectedLayers = () => {
+        const ids = Array.from(selectedLayerIds);
+        if (ids.length < 2) return;
+
+        const selected = layers.filter(l => selectedLayerIds.has(l.id));
+        if (selected.length < 2) return;
+
+        const mergedStrokes = selected.flatMap(l => l.strokes || []);
+        const mergedNameBase = selected.map(l => l.name).join(' + ').slice(0, 60) || 'Merged';
+        const mergedLayer = {
+            id: crypto.randomUUID(),
+            name: makeUniqueLayerName(`Merged: ${mergedNameBase}`),
+            visible: true,
+            createdAt: Date.now(),
+            strokes: mergedStrokes
+        };
+
+        // keep relative order: insert merged where first selected was
+        const firstIdx = layers.findIndex(l => l.id === ids[0]);
+        layers = layers.filter(l => !selectedLayerIds.has(l.id));
+        layers.splice(Math.max(0, firstIdx), 0, mergedLayer);
+
+        selectedLayerIds.clear();
+        renderAllLayers();
+        saveCanvasState();
+        rebuildLayersUI();
+    };
+
+    const rebuildLayersUI = () => {
+        if (!layersListEl || !mergeSelectedButton) return;
+
+        layersListEl.innerHTML = '';
+
+        if (!layers.length) {
+            const empty = document.createElement('div');
+            empty.textContent = 'No layers yet';
+            empty.style.fontSize = '12px';
+            empty.style.opacity = '0.7';
+            empty.style.padding = '4px';
+            layersListEl.appendChild(empty);
+        } else {
+            // newest first
+            const ordered = [...layers].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            for (const layer of ordered) {
+                const row = document.createElement('div');
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = '18px 20px 1fr 28px 28px';
+                row.style.alignItems = 'center';
+                row.style.gap = '6px';
+                row.style.padding = '4px 2px';
+                row.style.borderRadius = '3px';
+                row.style.transition = 'background-color 0.15s';
+                row.addEventListener('mouseenter', () => {
+                    row.style.backgroundColor = '#f5f5f5';
+                });
+                row.addEventListener('mouseleave', () => {
+                    row.style.backgroundColor = 'transparent';
+                });
+
+                const sel = document.createElement('input');
+                sel.type = 'checkbox';
+                sel.checked = selectedLayerIds.has(layer.id);
+                sel.title = 'Select for merge';
+                sel.style.cursor = 'pointer';
+                sel.addEventListener('change', (ev) => {
+                    if (sel.checked) selectedLayerIds.add(layer.id);
+                    else selectedLayerIds.delete(layer.id);
+                    mergeSelectedButton.disabled = selectedLayerIds.size < 2;
+                });
+                sel.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                });
+
+                const swatch = document.createElement('div');
+                const uColors = [...new Set((layer.strokes || []).map(s => s.color))];
+                swatch.style.width = '18px';
+                swatch.style.height = '18px';
+                swatch.style.borderRadius = '3px';
+                swatch.style.border = '1px solid #ccc';
+                swatch.style.boxSizing = 'border-box';
+                swatch.style.cursor = 'pointer';
+                swatch.title = 'Click to change layer color';
+                if (uColors.length === 1) {
+                    swatch.style.backgroundColor = uColors[0];
+                } else if (uColors.length > 1) {
+                    swatch.style.background = `linear-gradient(135deg, ${uColors[0]}, ${uColors[1]})`;
+                }
+                
+                // Color picker dropdown
+                swatch.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    
+                    // Create color picker popup
+                    const popup = document.createElement('div');
+                    popup.style.position = 'absolute';
+                    popup.style.backgroundColor = 'white';
+                    popup.style.border = '1px solid #ccc';
+                    popup.style.borderRadius = '4px';
+                    popup.style.padding = '6px';
+                    popup.style.display = 'flex';
+                    popup.style.gap = '4px';
+                    popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                    popup.style.zIndex = '10000';
+                    
+                    const rect = swatch.getBoundingClientRect();
+                    popup.style.left = `${rect.right + 5}px`;
+                    popup.style.top = `${rect.top}px`;
+                    
+                    COLORS.forEach(color => {
+                        const colorBtn = document.createElement('div');
+                        colorBtn.style.width = '20px';
+                        colorBtn.style.height = '20px';
+                        colorBtn.style.backgroundColor = color;
+                        colorBtn.style.border = '1px solid #999';
+                        colorBtn.style.borderRadius = '3px';
+                        colorBtn.style.cursor = 'pointer';
+                        colorBtn.title = color;
+                        
+                        colorBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            changeLayerColor(layer.id, color);
+                            document.body.removeChild(popup);
+                        });
+                        
+                        popup.appendChild(colorBtn);
+                    });
+                    
+                    document.body.appendChild(popup);
+                    
+                    const closePopup = (e) => {
+                        if (!popup.contains(e.target)) {
+                            document.body.removeChild(popup);
+                            document.removeEventListener('click', closePopup);
+                        }
+                    };
+                    setTimeout(() => document.addEventListener('click', closePopup), 0);
+                });
+
+                const name = document.createElement('div');
+                name.textContent = layer.name;
+                name.title = layer.name;
+                name.style.fontSize = '12px';
+                name.style.whiteSpace = 'nowrap';
+                name.style.overflow = 'hidden';
+                name.style.textOverflow = 'ellipsis';
+                name.style.opacity = layer.visible ? '1' : '0.5';
+
+                const vis = document.createElement('button');
+                vis.type = 'button';
+                vis.innerHTML = layer.visible ? '👁️' : '👁️‍🗨️';
+                vis.title = layer.visible ? 'Hide layer' : 'Show layer';
+                vis.style.fontSize = '16px';
+                vis.style.padding = '2px';
+                vis.style.border = 'none';
+                vis.style.background = 'transparent';
+                vis.style.cursor = 'pointer';
+                vis.style.opacity = layer.visible ? '1' : '0.5';
+                vis.addEventListener('click', (ev) => {
+                    ev.preventDefault(); 
+                    ev.stopPropagation();
+                    toggleLayerVisibility(layer.id);
+                }, true);
+
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.textContent = '🗑️';
+                del.title = 'Delete layer';
+                del.style.fontSize = '14px';
+                del.style.padding = '2px';
+                del.style.border = 'none';
+                del.style.background = 'transparent';
+                del.style.cursor = 'pointer';
+                del.addEventListener('click', (ev) => {
+                    ev.preventDefault(); 
+                    ev.stopPropagation();
+                    deleteLayer(layer.id);
+                }, true);
+
+                row.appendChild(sel);
+                row.appendChild(swatch);
+                row.appendChild(name);
+                row.appendChild(vis);
+                row.appendChild(del);
+                layersListEl.appendChild(row);
+            }
+        }
+
+        mergeSelectedButton.disabled = selectedLayerIds.size < 2;
     };
 
     // --- UI Creation ---
@@ -169,6 +570,7 @@
         canvasOverlay.style.opacity = OVERLAY_OPACITY.toString();
         canvasOverlay.style.zIndex = '1000';
         canvasOverlay.style.backgroundColor = 'transparent';
+        canvasOverlay.style.display = 'none';
         canvasOverlay.style.boxSizing = 'border-box';
         canvasOverlay.style.cursor = 'none';
 
@@ -203,7 +605,6 @@
         log('Canvas overlay created.');
     };
 
-    // --- Cursor Preview Logic ---
     const createCursorPreview = () => {
         if (cursorPreview) return;
 
@@ -265,57 +666,125 @@
         controlsContainer.id = 'strands-drawing-controls';
         controlsContainer.style.position = 'absolute';
         controlsContainer.style.top = '10px';
-        controlsContainer.style.right = '-130px';
+        controlsContainer.style.right = '-240px';
         controlsContainer.style.zIndex = '1002';
         controlsContainer.style.display = 'none';
         controlsContainer.style.fontFamily = 'Arial, sans-serif';
         controlsContainer.style.fontSize = '14px';
-        controlsContainer.style.minWidth = '100px';
-        controlsContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'; // Slightly more opaque
-        controlsContainer.style.border = '1px solid #aaa';
-        controlsContainer.style.borderRadius = '5px';
-        controlsContainer.style.padding = '8px';
-        controlsContainer.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+        controlsContainer.style.minWidth = '220px';
+        controlsContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.97)';
+        controlsContainer.style.border = '1px solid #bbb';
+        controlsContainer.style.borderRadius = '6px';
+        controlsContainer.style.padding = '12px';
+        controlsContainer.style.boxShadow = '0 3px 12px rgba(0,0,0,0.25)';
 
-        // Redesigned Color Picker
+        // Close button in top-right corner
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.textContent = '✕';
+        closeButton.title = 'Hide overlay';
+        closeButton.style.position = 'absolute';
+        closeButton.style.top = '4px';
+        closeButton.style.right = '4px';
+        closeButton.style.padding = '4px 7px';
+        closeButton.style.fontSize = '14px';
+        closeButton.style.cursor = 'pointer';
+        closeButton.style.border = 'none';
+        closeButton.style.borderRadius = '3px';
+        closeButton.style.backgroundColor = 'transparent';
+        closeButton.style.color = '#666';
+        closeButton.addEventListener('mouseenter', () => {
+            closeButton.style.backgroundColor = '#f0f0f0';
+            closeButton.style.color = '#000';
+        });
+        closeButton.addEventListener('mouseleave', () => {
+            closeButton.style.backgroundColor = 'transparent';
+            closeButton.style.color = '#666';
+        });
+        closeButton.addEventListener('click', (event) => {
+             event.preventDefault();
+             event.stopPropagation();
+             event.stopImmediatePropagation();
+             log("Hiding overlay...");
+             toggleOverlay();
+        }, true);
+        closeButton.addEventListener('mousedown', (event) => {
+             event.stopPropagation();
+        }, true);
+        closeButton.addEventListener('mouseup', (event) => {
+             event.stopPropagation();
+        }, true);
+
+        // Title
+        const title = document.createElement('div');
+        title.textContent = 'Drawing Tools';
+        title.style.fontSize = '14px';
+        title.style.fontWeight = '700';
+        title.style.marginBottom = '12px';
+        title.style.color = '#333';
+        title.style.paddingRight = '20px';
+
+        // Color Section
+        const colorSection = document.createElement('div');
+        colorSection.style.marginBottom = '12px';
+
+        const colorLabel = document.createElement('div');
+        colorLabel.textContent = 'Color';
+        colorLabel.style.fontSize = '12px';
+        colorLabel.style.fontWeight = '600';
+        colorLabel.style.marginBottom = '6px';
+        colorLabel.style.color = '#555';
+
         const colorPickerContainer = document.createElement('div');
         colorPickerContainer.id = 'drawing-color-picker';
         colorPickerContainer.style.display = 'flex';
-        colorPickerContainer.style.flexDirection = 'column';
-        colorPickerContainer.style.gap = '5px';
-        colorPickerContainer.style.alignItems = 'center';
+        colorPickerContainer.style.gap = '6px';
+        colorPickerContainer.style.flexWrap = 'wrap';
 
         colorButtons = [];
 
         COLORS.forEach(color => {
             const colorButton = document.createElement('button');
-            // --- Ensure button type ---
             colorButton.type = 'button';
             colorButton.className = 'drawing-color-button';
             colorButton.setAttribute('data-color', color);
-            colorButton.style.width = '25px';
-            colorButton.style.height = '25px';
-            colorButton.style.border = '2px solid transparent';
+            colorButton.style.width = '32px';
+            colorButton.style.height = '32px';
+            colorButton.style.border = '2px solid #ddd';
             colorButton.style.borderRadius = '4px';
             colorButton.style.backgroundColor = color;
             colorButton.style.cursor = 'pointer';
             colorButton.style.padding = '0';
             colorButton.style.boxSizing = 'border-box';
+            colorButton.style.transition = 'all 0.15s';
 
             if (color === currentColor) {
-                colorButton.style.border = '2px solid #000';
+                colorButton.style.border = '3px solid #333';
+                colorButton.style.transform = 'scale(1.1)';
             }
 
-            // --- Robust click handler ---
+            colorButton.addEventListener('mouseenter', () => {
+                if (color !== currentColor) {
+                    colorButton.style.transform = 'scale(1.05)';
+                }
+            });
+            colorButton.addEventListener('mouseleave', () => {
+                if (color !== currentColor) {
+                    colorButton.style.transform = 'scale(1)';
+                }
+            });
+
             colorButton.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 currentColor = color;
                 colorButtons.forEach(btn => {
                     if (btn.getAttribute('data-color') === color) {
-                        btn.style.border = '2px solid #000';
+                        btn.style.border = '3px solid #333';
+                        btn.style.transform = 'scale(1.1)';
                     } else {
-                        btn.style.border = '2px solid transparent';
+                        btn.style.border = '2px solid #ddd';
+                        btn.style.transform = 'scale(1)';
                     }
                 });
                 saveSettings();
@@ -326,19 +795,24 @@
             colorPickerContainer.appendChild(colorButton);
         });
 
-        // Brush Size Slider
-        const sizeSliderContainer = document.createElement('div');
-        sizeSliderContainer.style.marginTop = '10px';
-        sizeSliderContainer.style.display = 'flex';
-        sizeSliderContainer.style.flexDirection = 'column';
-        sizeSliderContainer.style.alignItems = 'center';
-        sizeSliderContainer.style.width = '90px';
+        colorSection.appendChild(colorLabel);
+        colorSection.appendChild(colorPickerContainer);
 
-        const sizeLabel = document.createElement('span');
-        sizeLabel.id = 'drawing-brush-size-label';
-        sizeLabel.textContent = currentBrushSize;
+        // Brush Size Section
+        const sizeSection = document.createElement('div');
+        sizeSection.style.marginBottom = '12px';
+
+        const sizeLabel = document.createElement('div');
+        sizeLabel.textContent = 'Brush Size';
         sizeLabel.style.fontSize = '12px';
-        sizeLabel.style.marginBottom = '3px';
+        sizeLabel.style.fontWeight = '600';
+        sizeLabel.style.marginBottom = '6px';
+        sizeLabel.style.color = '#555';
+
+        const sizeSliderContainer = document.createElement('div');
+        sizeSliderContainer.style.display = 'flex';
+        sizeSliderContainer.style.alignItems = 'center';
+        sizeSliderContainer.style.gap = '8px';
 
         const sizeSlider = document.createElement('input');
         sizeSlider.type = 'range';
@@ -346,76 +820,133 @@
         sizeSlider.min = MIN_BRUSH_SIZE;
         sizeSlider.max = MAX_BRUSH_SIZE;
         sizeSlider.value = currentBrushSize;
-        sizeSlider.style.writingMode = 'bt-lr';
-        sizeSlider.style.webkitAppearance = 'slider-vertical';
-        sizeSlider.style.width = '90px';
-        sizeSlider.style.height = '70px';
+        sizeSlider.style.flex = '1';
         sizeSlider.style.cursor = 'pointer';
+
+        const sizeValue = document.createElement('span');
+        sizeValue.id = 'drawing-brush-size-value';
+        sizeValue.textContent = currentBrushSize;
+        sizeValue.style.fontSize = '12px';
+        sizeValue.style.fontWeight = '600';
+        sizeValue.style.minWidth = '25px';
+        sizeValue.style.textAlign = 'right';
+        sizeValue.style.color = '#333';
+
         sizeSlider.addEventListener('input', () => {
             currentBrushSize = parseInt(sizeSlider.value, 10);
-            sizeLabel.textContent = currentBrushSize;
+            sizeValue.textContent = currentBrushSize;
             saveSettings();
             updateCursorPreviewStyle();
         });
 
-        sizeSliderContainer.appendChild(sizeLabel);
         sizeSliderContainer.appendChild(sizeSlider);
+        sizeSliderContainer.appendChild(sizeValue);
+
+        sizeSection.appendChild(sizeLabel);
+        sizeSection.appendChild(sizeSliderContainer);
 
         // Clear Button
         const clearButton = document.createElement('button');
-        // --- Explicitly set type and prevent all actions ---
         clearButton.type = 'button';
-        clearButton.textContent = '🗑️';
-        clearButton.title = 'Clear Canvas';
-        clearButton.style.display = 'block';
-        clearButton.style.marginTop = '10px';
-        clearButton.style.padding = '5px';
-        clearButton.style.fontSize = '16px';
+        clearButton.textContent = '🗑️ Clear All Layers';
+        clearButton.title = 'Clear all layers';
+        clearButton.style.width = '100%';
+        clearButton.style.marginBottom = '12px';
+        clearButton.style.padding = '8px';
+        clearButton.style.fontSize = '13px';
+        clearButton.style.fontWeight = '600';
         clearButton.style.cursor = 'pointer';
-        clearButton.style.border = '1px solid #ccc';
+        clearButton.style.border = '1px solid #ddd';
         clearButton.style.borderRadius = '4px';
-        clearButton.style.backgroundColor = '#f9f9f9';
+        clearButton.style.backgroundColor = '#fff';
+        clearButton.style.color = '#d32f2f';
+        clearButton.style.transition = 'all 0.15s';
+        clearButton.addEventListener('mouseenter', () => {
+            clearButton.style.backgroundColor = '#ffebee';
+            clearButton.style.borderColor = '#d32f2f';
+        });
+        clearButton.addEventListener('mouseleave', () => {
+            clearButton.style.backgroundColor = '#fff';
+            clearButton.style.borderColor = '#ddd';
+        });
         clearButton.addEventListener('click', (event) => {
-            // --- Aggressive prevention ---
             event.preventDefault();
             event.stopPropagation();
-            if (event.target !== clearButton) return; // Extra check
-            if (ctx && canvasOverlay) {
-                log("Clearing canvas...");
-                ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
-                saveCanvasState();
+            if (event.target !== clearButton) return;
+            if (!confirm('Clear all layers? This cannot be undone.')) return;
+            log('Clearing all layers...');
+            layers = [];
+            selectedLayerIds.clear();
+            renderAllLayers();
+            saveCanvasState();
+            rebuildLayersUI();
+        }, true);
+
+        // --- Layers panel ---
+        layersPanel = document.createElement('div');
+        layersPanel.style.paddingTop = '12px';
+        layersPanel.style.borderTop = '1px solid #e0e0e0';
+
+        const layersTitle = document.createElement('div');
+        layersTitle.textContent = 'Layers';
+        layersTitle.style.fontSize = '12px';
+        layersTitle.style.fontWeight = '600';
+        layersTitle.style.marginBottom = '8px';
+        layersTitle.style.color = '#555';
+
+        layersListEl = document.createElement('div');
+        layersListEl.id = 'drawing-layers-list';
+        layersListEl.style.display = 'block';
+        layersListEl.style.maxHeight = '180px';
+        layersListEl.style.overflow = 'auto';
+        layersListEl.style.border = '1px solid #e0e0e0';
+        layersListEl.style.borderRadius = '4px';
+        layersListEl.style.padding = '4px';
+        layersListEl.style.background = '#fafafa';
+        layersListEl.style.marginBottom = '8px';
+
+        mergeSelectedButton = document.createElement('button');
+        mergeSelectedButton.type = 'button';
+        mergeSelectedButton.textContent = '⚙️ Merge Selected';
+        mergeSelectedButton.title = 'Merge selected layers into one';
+        mergeSelectedButton.style.width = '100%';
+        mergeSelectedButton.style.padding = '6px 8px';
+        mergeSelectedButton.style.fontSize = '12px';
+        mergeSelectedButton.style.fontWeight = '600';
+        mergeSelectedButton.style.cursor = 'pointer';
+        mergeSelectedButton.style.border = '1px solid #ddd';
+        mergeSelectedButton.style.borderRadius = '4px';
+        mergeSelectedButton.style.backgroundColor = '#fff';
+        mergeSelectedButton.style.transition = 'all 0.15s';
+        mergeSelectedButton.disabled = true;
+        mergeSelectedButton.addEventListener('mouseenter', () => {
+            if (!mergeSelectedButton.disabled) {
+                mergeSelectedButton.style.backgroundColor = '#f0f0f0';
             }
-        }, true); // Use capture phase
+        });
+        mergeSelectedButton.addEventListener('mouseleave', () => {
+            mergeSelectedButton.style.backgroundColor = '#fff';
+        });
+        mergeSelectedButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            mergeSelectedLayers();
+        }, true);
 
-        // Hide Button
-        const hideButton = document.createElement('button');
-        hideButton.type = 'button';
-        hideButton.textContent = '✕';
-        hideButton.title = 'Hide overlay';
-        hideButton.style.display = 'block';
-        hideButton.style.marginTop = '5px';
-        hideButton.style.padding = '5px';
-        hideButton.style.fontSize = '16px';
-        hideButton.style.cursor = 'pointer';
-        hideButton.style.border = '1px solid #ccc';
-        hideButton.style.borderRadius = '4px';
-        hideButton.style.backgroundColor = '#f9f9f9';
-        hideButton.addEventListener('click', (event) => {
-             // --- Aggressive prevention ---
-             event.preventDefault();
-             event.stopPropagation();
-             if (event.target !== hideButton) return; // Extra check
-             log("Hiding overlay...");
-             toggleOverlay();
-        }, true); // Use capture phase
+        layersPanel.appendChild(layersTitle);
+        layersPanel.appendChild(layersListEl);
+        layersPanel.appendChild(mergeSelectedButton);
 
-        controlsContainer.appendChild(colorPickerContainer);
-        controlsContainer.appendChild(sizeSliderContainer);
+        controlsContainer.appendChild(closeButton);
+        controlsContainer.appendChild(title);
+        controlsContainer.appendChild(colorSection);
+        controlsContainer.appendChild(sizeSection);
         controlsContainer.appendChild(clearButton);
-        controlsContainer.appendChild(hideButton);
+        controlsContainer.appendChild(layersPanel);
 
         gameBoardContainer.appendChild(controlsContainer);
         log('Controls created.');
+        rebuildLayersUI();
     };
 
     // --- Canvas Size Update ---
@@ -425,18 +956,16 @@
         const containerRect = gameBoardContainer.getBoundingClientRect();
         dpr = window.devicePixelRatio || 1;
 
-        // Set internal resolution (width/height attrs) based on CSS size * DPR
-        // This makes the canvas render crisply without needing ctx.scale()
         canvasOverlay.width = Math.floor(containerRect.width * dpr);
         canvasOverlay.height = Math.floor(containerRect.height * dpr);
 
-        // Ensure CSS size matches the container exactly
         canvasOverlay.style.width = `${containerRect.width}px`;
         canvasOverlay.style.height = `${containerRect.height}px`;
 
-        // Reset context transform to identity
-        // This ensures drawing commands use the CSS pixel coordinate system directly.
         ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        updateLetterGridCache();
+        renderAllLayers();
 
         log(`Canvas updated: Display(${containerRect.width}x${containerRect.height}), Internal(${canvasOverlay.width}x${canvasOverlay.height}), DPR(${dpr})`);
     };
@@ -540,28 +1069,20 @@
 
         if (canvasOverlay) {
             setTimeout(() => {
-                 updateCanvasSize();
-                 loadCanvasState();
-                 if (colorButtons.length > 0) {
-                     colorButtons.forEach(btn => {
-                         if (btn.getAttribute('data-color') === currentColor) {
-                             btn.style.border = '2px solid #000';
-                         } else {
-                             btn.style.border = '2px solid transparent';
-                         }
-                     });
-                 }
-                 updateCursorPreviewStyle();
+                updateCanvasSize();
+                loadCanvasState(); // now loads layers + renders + UI
+                // ...existing colorButtons highlight code...
+                updateCursorPreviewStyle();
 
-                 window.addEventListener('resize', () => {
-                     clearTimeout(window.strandsResizeTimeout);
-                     window.strandsResizeTimeout = setTimeout(updateCanvasSize, 100);
-                 });
-                 const resizeObserver = new ResizeObserver(() => {
-                     clearTimeout(window.strandsResizeObserverTimeout);
-                     window.strandsResizeObserverTimeout = setTimeout(updateCanvasSize, 100);
-                 });
-                 resizeObserver.observe(gameBoardContainer);
+                window.addEventListener('resize', () => {
+                    clearTimeout(window.strandsResizeTimeout);
+                    window.strandsResizeTimeout = setTimeout(updateCanvasSize, 100);
+                });
+                const resizeObserver = new ResizeObserver(() => {
+                    clearTimeout(window.strandsResizeObserverTimeout);
+                    window.strandsResizeObserverTimeout = setTimeout(updateCanvasSize, 100);
+                });
+                resizeObserver.observe(gameBoardContainer);
             }, 100);
         }
     };
