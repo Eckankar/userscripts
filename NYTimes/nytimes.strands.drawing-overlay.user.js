@@ -450,12 +450,12 @@
                 } else if (uColors.length > 1) {
                     swatch.style.background = `linear-gradient(135deg, ${uColors[0]}, ${uColors[1]})`;
                 }
-                
+
                 // Color picker dropdown
                 swatch.addEventListener('click', (ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
-                    
+
                     // Create color picker popup
                     const popup = document.createElement('div');
                     popup.style.position = 'absolute';
@@ -467,11 +467,11 @@
                     popup.style.gap = '4px';
                     popup.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
                     popup.style.zIndex = '10000';
-                    
+
                     const rect = swatch.getBoundingClientRect();
                     popup.style.left = `${rect.right + 5}px`;
                     popup.style.top = `${rect.top}px`;
-                    
+
                     COLORS.forEach(color => {
                         const colorBtn = document.createElement('div');
                         colorBtn.style.width = '20px';
@@ -481,19 +481,19 @@
                         colorBtn.style.borderRadius = '3px';
                         colorBtn.style.cursor = 'pointer';
                         colorBtn.title = color;
-                        
+
                         colorBtn.addEventListener('click', (e) => {
                             e.preventDefault();
                             e.stopPropagation();
                             changeLayerColor(layer.id, color);
                             document.body.removeChild(popup);
                         });
-                        
+
                         popup.appendChild(colorBtn);
                     });
-                    
+
                     document.body.appendChild(popup);
-                    
+
                     const closePopup = (e) => {
                         if (!popup.contains(e.target)) {
                             document.body.removeChild(popup);
@@ -523,7 +523,7 @@
                 vis.style.cursor = 'pointer';
                 vis.style.opacity = layer.visible ? '1' : '0.5';
                 vis.addEventListener('click', (ev) => {
-                    ev.preventDefault(); 
+                    ev.preventDefault();
                     ev.stopPropagation();
                     toggleLayerVisibility(layer.id);
                 }, true);
@@ -538,7 +538,7 @@
                 del.style.background = 'transparent';
                 del.style.cursor = 'pointer';
                 del.addEventListener('click', (ev) => {
-                    ev.preventDefault(); 
+                    ev.preventDefault();
                     ev.stopPropagation();
                     deleteLayer(layer.id);
                 }, true);
@@ -636,7 +636,7 @@
                 }
             }
         };
-        
+
         canvasOverlay.addEventListener('mousemove', handleMove);
         canvasOverlay.addEventListener('touchmove', (e) => { handleMove(e); e.preventDefault(); }, { passive: false });
         canvasOverlay.addEventListener('mouseleave', () => {
