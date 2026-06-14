@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name       NYTimes Strands Drawing Overlay
 // @namespace  http://mathemaniac.org/
-// @version    1.1.0
+// @version    1.1.1
 // @description  Adds a togglable drawing canvas overlay to the NYTimes.com Strands game.
 // @match      https://www.nytimes.com/games/strands
 // @copyright  2025-2026, Sebastian Paaske Tørholm
@@ -10,6 +10,7 @@
 // ==/UserScript==
 
 // Changelog:
+// 1.1.1 - Refresh letter positions when opening tools and require stroke to pass through letter centres to count.
 // 1.1.0 - Moved to vector-based layers that can be deleted/hidden and so on.
 // 1.0.0 - Initial release
 
@@ -43,7 +44,7 @@
     /** @type {null|{color:string,size:number,points:Array<{nx:number,ny:number}>,letters:string[]}} */
     let activeStroke = null;
     let selectedLayerIds = new Set();
-    let letterGridCache = []; // [{letter, rect:{left,top,right,bottom}}...]
+    let letterGridCache = []; // [{letter, rect:{left,top,right,bottom}, center:{x,y}}...]
 
     // --- DOM Elements ---
     let gameBoardContainer = null;
@@ -158,21 +159,65 @@
                 const letter = (btn.textContent || '').trim();
                 if (!letter) return null;
                 const r = btn.getBoundingClientRect();
-                return { letter, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } };
+                return {
+                    letter,
+                    rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+                    center: { x: r.left + (r.width / 2), y: r.top + (r.height / 2) }
+                };
             })
             .filter(Boolean);
         log(`Letter grid cached: ${letterGridCache.length} cells.`);
     };
 
-    const hitTestLetterAtClientPoint = (clientX, clientY) => {
-        for (let i = 0; i < letterGridCache.length; i++) {
-            const cell = letterGridCache[i];
-            const r = cell.rect;
-            if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
-                return { letter: cell.letter, cellIndex: i };
-            }
+    const getPointToSegmentDistanceSq = (px, py, x1, y1, x2, y2) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+
+        if (dx === 0 && dy === 0) {
+            const distX = px - x1;
+            const distY = py - y1;
+            return { distanceSq: (distX * distX) + (distY * distY), t: 0 };
         }
-        return null;
+
+        const segmentLengthSq = (dx * dx) + (dy * dy);
+        const rawT = (((px - x1) * dx) + ((py - y1) * dy)) / segmentLengthSq;
+        const t = Math.max(0, Math.min(1, rawT));
+        const closestX = x1 + (dx * t);
+        const closestY = y1 + (dy * t);
+        const distX = px - closestX;
+        const distY = py - closestY;
+
+        return { distanceSq: (distX * distX) + (distY * distY), t };
+    };
+
+    const getLettersTouchedBySegment = (startClientX, startClientY, endClientX, endClientY, brushSize, visitedCells = null) => {
+        const strokeRadius = Math.max(1, brushSize / 2);
+        const maxDistanceSq = strokeRadius * strokeRadius;
+
+        return letterGridCache
+            .map((cell, cellIndex) => {
+                if (visitedCells && visitedCells.has(cellIndex)) return null;
+
+                const hit = getPointToSegmentDistanceSq(
+                    cell.center.x,
+                    cell.center.y,
+                    startClientX,
+                    startClientY,
+                    endClientX,
+                    endClientY
+                );
+
+                if (hit.distanceSq > maxDistanceSq) return null;
+
+                return {
+                    letter: cell.letter,
+                    cellIndex,
+                    t: hit.t,
+                    distanceSq: hit.distanceSq
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.t - b.t || a.distanceSq - b.distanceSq);
     };
 
     const makeUniqueLayerName = (base) => {
@@ -225,11 +270,14 @@
     // --- Canvas Logic ---
     const startDrawing = (e) => {
         isDrawing = true;
+        updateLetterGridCache();
 
         const [cssX, cssY] = getCanvasCoordinates(e);
         const rect = canvasOverlay.getBoundingClientRect();
         const nx = rect.width ? (cssX / rect.width) : 0;
         const ny = rect.height ? (cssY / rect.height) : 0;
+        const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+        const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
 
         activeStroke = {
             color: currentColor,
@@ -239,15 +287,18 @@
             visitedCells: new Set()
         };
 
-        // seed letter (if any)
-        const hitResult = hitTestLetterAtClientPoint(
-            e.type.includes('touch') ? e.touches[0].clientX : e.clientX,
-            e.type.includes('touch') ? e.touches[0].clientY : e.clientY
+        const hitResults = getLettersTouchedBySegment(
+            clientX,
+            clientY,
+            clientX,
+            clientY,
+            activeStroke.size,
+            activeStroke.visitedCells
         );
-        if (hitResult) {
+        hitResults.forEach(hitResult => {
             activeStroke.letters.push(hitResult.letter);
             activeStroke.visitedCells.add(hitResult.cellIndex);
-        }
+        });
 
         lastX = cssX * dpr;
         lastY = cssY * dpr;
@@ -260,17 +311,27 @@
         const rect = canvasOverlay.getBoundingClientRect();
         const nx = rect.width ? (cssX / rect.width) : 0;
         const ny = rect.height ? (cssY / rect.height) : 0;
+        const previousPoint = activeStroke.points[activeStroke.points.length - 1];
 
         activeStroke.points.push({ nx, ny });
 
-        // auto-name sampling: collect unique letters in order from unique cells
+        // auto-name sampling: collect unique letters in order when the stroke crosses cell centres
         const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
         const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-        const hitResult = hitTestLetterAtClientPoint(clientX, clientY);
-        if (hitResult && !activeStroke.visitedCells.has(hitResult.cellIndex)) {
+        const previousClientX = rect.left + (previousPoint.nx * rect.width);
+        const previousClientY = rect.top + (previousPoint.ny * rect.height);
+        const hitResults = getLettersTouchedBySegment(
+            previousClientX,
+            previousClientY,
+            clientX,
+            clientY,
+            activeStroke.size,
+            activeStroke.visitedCells
+        );
+        hitResults.forEach(hitResult => {
             activeStroke.letters.push(hitResult.letter);
             activeStroke.visitedCells.add(hitResult.cellIndex);
-        }
+        });
 
         // live draw (only the incremental segment) for responsiveness
         ctx.globalCompositeOperation = 'source-over';
@@ -981,6 +1042,10 @@
             canvasOverlay.style.backgroundColor = CANVAS_BACKGROUND_COLOR;
             canvasOverlay.style.display = 'block';
             controlsContainer.style.display = 'block';
+            updateCanvasSize();
+            requestAnimationFrame(() => {
+                if (isOverlayVisible) updateLetterGridCache();
+            });
             toggleButton.setAttribute('aria-label', 'Hide drawing notes overlay');
             cursorPreview.style.display = 'none'; // Start hidden, shown on move
         } else {
