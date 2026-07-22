@@ -9,7 +9,7 @@ This script is a rewrite of the original [DR Live Translate](https://greasyfork.
 * Support for either locally hosted LLMs, or running against an API like OpenRouter or similar.
 * Show either combined English+Danish or only English subtitles.
 
---
+---
 
 ## Finding a provider
 
