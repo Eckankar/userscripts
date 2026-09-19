@@ -1,15 +1,17 @@
 // ==UserScript==
 // @name       NYTimes Strands Drawing Overlay
 // @namespace  http://mathemaniac.org/
-// @version    1.1.1
+// @version    1.2.0
 // @description  Adds a togglable drawing canvas overlay to the NYTimes.com Strands game.
 // @match      https://www.nytimes.com/games/strands
+// @match      https://www.nytimes.com/games/bonus/strands/colorful/*
 // @copyright  2025-2026, Sebastian Paaske Tørholm
 // @grant      none
 // @license    MIT
 // ==/UserScript==
 
 // Changelog:
+// 1.2.0 - Also support the Bonus Puzzles - Colorful Strands
 // 1.1.1 - Refresh letter positions when opening tools and require stroke to pass through letter centres to count.
 // 1.1.0 - Moved to vector-based layers that can be deleted/hidden and so on.
 // 1.0.0 - Initial release
